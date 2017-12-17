@@ -23,9 +23,7 @@ main.o:	$(DEP)
 %.o:	%.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-.PHONY: clean mrproper
+.PHONY: clean
 clean:
 	rm -rf *.o
-
-mrproper: clean
 	rm -rf $(EXEC)
