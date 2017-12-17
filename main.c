@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <wait.h>
 
 void afficher(pid_t pid, int couleur, int lecture);
 void handler(int sig);
@@ -40,6 +41,8 @@ int main(int argc, char *argv[]) {
 		pipe(tube[i]);
 	}
 	srand(time(NULL) + getpid());
+	fichier = open("elu.txt", O_CREAT | O_RDWR | O_APPEND,
+	S_IRUSR | S_IWUSR);
 	signal(SIGUSR1, handler);
 	/**
 	 *  La première boucle va générer les étages.
@@ -64,6 +67,10 @@ int main(int argc, char *argv[]) {
 						couleur = (rand() % c) + 1;
 						write(tube[j][1], (void*) &couleur, sizeof(int));
 						pause();
+						read(fichier, (void*) buff, 10 * sizeof(char));
+						lecture = atoi(buff);
+						afficher(getpid(), couleur, lecture);
+						exit(EXIT_SUCCESS);
 					}
 				} else if (i == 0) {
 					if (fork() == 0) {
@@ -71,13 +78,11 @@ int main(int argc, char *argv[]) {
 						char *buff = NULL;
 						read(tube[j][0], (void *) &couleur[0], sizeof(int));
 						read(tube[j + 1][0], (void *) &couleur[1], sizeof(int));
-						fichier = open("elu.txt", O_CREAT | O_RDWR | O_APPEND,
-						S_IRUSR | S_IWUSR);
 						/*
 						 * La couleur est choisie aléatoirement puis convertit en caractère.
 						 * Écriture dans le fichier ensuite.
 						 */
-						size = asprintf(&buff, "%s", couleur[rand() % 2]);
+						size = asprintf(&buff, "%d", couleur[rand() % 2]);
 						write(fichier, (void *) buff, size);
 						kill(getppid(), SIGUSR1);
 						free(buff);
@@ -105,16 +110,16 @@ int main(int argc, char *argv[]) {
 				 */
 				if (i == (n - 1)) {
 					if ((etageZero[i] = fork()) == 0) {
-						int couleur, lecture, size;
+						int couleur, lecture;
 						char buff[10];
 						couleur = (rand() % c) + 1;
 						write(tube[j][1], (void*) &couleur, sizeof(int));
 						write(tube[j + 1][1], (void*) &couleur, sizeof(int));
 						pause();
-						/*
-						 * Non fini
-						 */
+						read(fichier, (void*) buff, 10 * sizeof(char));
+						lecture = atoi(buff);
 						afficher(getpid(), couleur, lecture);
+						exit(EXIT_SUCCESS);
 					}
 				} else if (i == 0) {
 					if (fork() == 0) {
@@ -122,13 +127,11 @@ int main(int argc, char *argv[]) {
 						char *buff = NULL;
 						read(tube[j][0], (void *) &couleur[0], sizeof(int));
 						read(tube[j + 1][0], (void *) &couleur[1], sizeof(int));
-						fichier = open("elu.txt", O_CREAT | O_RDWR,
-						S_IRUSR | S_IWUSR);
 						/*
 						 * La couleur est choisie aléatoirement puis convertit en caractère.
 						 * Écriture dans le fichier ensuite.
 						 */
-						size = asprintf(&buff, "%s", couleur[rand() % 2]);
+						size = asprintf(&buff, "%d", couleur[rand() % 2]);
 						write(fichier, (void *) buff, size);
 						kill(getppid(), SIGUSR1);
 						free(buff);
@@ -151,13 +154,28 @@ int main(int argc, char *argv[]) {
 			}
 		}
 	}
+	for (i = 0; i < n; ++i) {
+		waitpid(etageZero[i], NULL, 0);
+	}
+	close(fichier);
+	for (i = 0; i < nbrPipe; ++i) {
+		close(tube[i][1]);
+		close(tube[i][0]);
+		free(tube[i]);
+	}
+	free(tube);
+	free(etageZero);
 	return EXIT_SUCCESS;
 }
 
 void afficher(pid_t pid, int couleur, int lecture) {
-/*
- * TODO
- */
+	printf("Le processus %d a la couleur %d et la couleur elue est %d", pid,
+			couleur, lecture);
+	if (couleur == lecture) {
+		printf(" : il a gagné !\n");
+	} else {
+		printf(", il a perdu.\n");
+	}
 }
 
 void handler(int sig) {
